@@ -18,9 +18,9 @@ export default function Home() {
     if (isLoaded && user) {
       fetchEvents();
     }
-  }, [isLoaded, user,fetchEvents]);
+  }, [isLoaded, user]);
 
-  const fetchEvents = useCallback(async () => {
+  const fetchEvents = async () => {
     try {
       setLoading(true);
       const userTier = user?.publicMetadata?.tier || 'free';
@@ -48,7 +48,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  },[])
+  };
 
   const upgradeTier = async (newTier) => {
     try {
