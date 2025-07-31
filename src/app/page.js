@@ -18,7 +18,7 @@ export default function Home() {
     if (isLoaded && user) {
       fetchEvents();
     }
-  }, [isLoaded, user]);
+  }, [isLoaded, user,fetchEvents]);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -48,7 +48,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };)
+  },[])
 
   const upgradeTier = async (newTier) => {
     try {
