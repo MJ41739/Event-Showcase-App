@@ -15,43 +15,40 @@ export default function Home() {
   const {signOut} = useClerk();
 
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setLoading(true);
-        const userTier = user?.publicMetadata?.tier || 'free';
-        
-        // Define tier hierarchy
-        const tierHierarchy = {
-          'free': ['free'],
-          'silver': ['free', 'silver'],
-          'gold': ['free', 'silver', 'gold'],
-          'platinum': ['free', 'silver', 'gold', 'platinum']
-        };
-  
-        const allowedTiers = tierHierarchy[userTier] || ['free'];
-  
-        const { data, error } = await supabase
-          .from('events')
-          .select('*')
-          .in('tier', allowedTiers)
-          .order('event_date', { ascending: true });
-  
-        if (error) throw error;
-        setEvents(data || []);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    
     if (isLoaded && user) {
       fetchEvents();
     }
   }, [isLoaded, user]);
 
+  const fetchEvents = useCallback(async () => {
+    try {
+      setLoading(true);
+      const userTier = user?.publicMetadata?.tier || 'free';
+      
+      // Define tier hierarchy
+      const tierHierarchy = {
+        'free': ['free'],
+        'silver': ['free', 'silver'],
+        'gold': ['free', 'silver', 'gold'],
+        'platinum': ['free', 'silver', 'gold', 'platinum']
+      };
 
+      const allowedTiers = tierHierarchy[userTier] || ['free'];
+
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .in('tier', allowedTiers)
+        .order('event_date', { ascending: true });
+
+      if (error) throw error;
+      setEvents(data || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };)
 
   const upgradeTier = async (newTier) => {
     try {
