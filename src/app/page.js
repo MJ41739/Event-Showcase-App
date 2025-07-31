@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import EventCard from "@/components/EventCard";
 import TierBadge from "@/components/TierBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import fetchEvents from "@/lib/fetchEvents";
 
 export default function Home() {
   const { user, isLoaded } = useUser();
