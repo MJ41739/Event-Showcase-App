@@ -5,6 +5,27 @@ A responsive web application that allows logged-in users to view events based on
 ## Live Link - 
 https://event-showcase-app.vercel.app/
 
+## Demo User Credentials
+   # Free Tier
+   - Username - freeuser123
+   - Email ID - freeuser@example.com
+   - Password - password123
+
+   # Silver Tier
+   - Username - silveruser123
+   - Email ID - silveruser@example.com
+   - Password - password123
+
+   # Gold Tier
+   - Username - golduser123
+   - Email ID - golduser@example.com
+   - Password - password123
+
+   # Platinum Tier
+   - Username - platinumuser123
+   - Email ID - platinumuser@example.com
+   - Password - password123
+   
 ## 🎯 Features
 
 - **Authentication**: Secure login/signup with Clerk.dev
