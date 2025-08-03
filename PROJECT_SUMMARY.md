@@ -1,5 +1,21 @@
 # 🎯 Project Summary: Tier-Based Event Showcase
 
+## Sample accounts 
+Username - freeuser123
+Email ID - freeuser@example.com
+Password - password123
+
+Username - silveruser123
+Email ID - silveruser@example.com
+Password - password123
+
+Username - golduser123
+Email ID - golduser@example.com
+Password - password123
+
+Username - platinumuser123
+Email ID - platinumuser@example.com
+Password - password123
 ## ✅ Completed Features
 
 ### 1. **Authentication System**

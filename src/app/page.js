@@ -176,15 +176,6 @@ export default function Home() {
             // Sign In View
             <div className="space-y-4">
               <SignIn routing="hash" />
-              <div className="text-center">
-                <span className="text-gray-500">Don&apos;t have an account? </span>
-                <button
-                  onClick={() => setShowSignUp(true)}
-                  className="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Sign up
-                </button>
-              </div>
             </div>
           ) : (
             // Sign Up View
