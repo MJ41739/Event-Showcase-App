@@ -1,7 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
-import React from "react";
 import { Analytics } from "@vercel/analytics/react";
 
 const geistSans = Geist({
@@ -19,33 +18,9 @@ export const metadata = {
   description: "View events based on your user tier",
 };
 
-// Create an ErrorBoundary component
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error, errorInfo) {
-    console.log('Error caught:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return <h1>Something went wrong.</h1>;
-    }
-    return this.props.children;
-  }
-}
-
 export default function RootLayout({ children }) {
   return (
-    <ErrorBoundary>
-      {<ClerkProvider>
+    <ClerkProvider>
       <html lang="en">
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
@@ -54,8 +29,6 @@ export default function RootLayout({ children }) {
           <Analytics />
         </body>
       </html>
-    </ClerkProvider>}
-    </ErrorBoundary>
-    
+    </ClerkProvider>
   );
 }
