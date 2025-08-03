@@ -1,6 +1,6 @@
 'use client';
 import { useUser, useClerk, SignIn, SignUp } from "@clerk/nextjs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import EventCard from "@/components/EventCard";
 import TierBadge from "@/components/TierBadge";
@@ -12,16 +12,13 @@ export default function Home() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const {signOut} = useClerk();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { signOut } = useClerk();
 
-  useEffect(() => {
-    if (isLoaded && user) {
-      fetchEvents();
-      fetchEventsDebug();
-    }
-  }, [isLoaded, user,fetchEvents, fetchEventsDebug]);
-
-  const fetchEvents = async () => {
+  // Wrap functions in useCallback to prevent recreation on every render
+  const fetchEvents = useCallback(async () => {
+    if (!user) return;
+    
     try {
       setLoading(true);
       const userTier = user?.publicMetadata?.tier || 'free';
@@ -47,105 +44,112 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-// Add this state at the top of your component with other useState hooks
-const [refreshKey, setRefreshKey] = useState(0);
-const fetchEventsDebug = async () => {
-  try {
-    const userTier = user?.publicMetadata?.tier || 'free';
-    console.log("Testing with user tier:", userTier);
+  const fetchEventsDebug = useCallback(async () => {
+    if (!user) return;
     
-    // Test 1: Get count of each tier
-    const { data: tierCounts } = await supabase
-      .from('events')
-      .select('tier')
-      .then(result => {
-        const counts = {};
-        result.data?.forEach(event => {
-          counts[event.tier] = (counts[event.tier] || 0) + 1;
+    try {
+      const userTier = user?.publicMetadata?.tier || 'free';
+      console.log("Testing with user tier:", userTier);
+      
+      // Test 1: Get count of each tier
+      const { data: tierCounts } = await supabase
+        .from('events')
+        .select('tier')
+        .then(result => {
+          const counts = {};
+          result.data?.forEach(event => {
+            counts[event.tier] = (counts[event.tier] || 0) + 1;
+          });
+          return { data: counts };
         });
-        return { data: counts };
-      });
-    
-    console.log("Events count by tier:", tierCounts);
-    
-    // Test 2: Try fetching silver events specifically
-    const { data: silverEvents, error: silverError } = await supabase
-      .from('events')
-      .select('*')
-      .eq('tier', 'silver');
-    
-    console.log("Silver events:", silverEvents);
-    console.log("Silver events error:", silverError);
-    
-    // Test 3: Try fetching with different tier arrays
-    const testTiers = ['free', 'silver'];
-    const { data: testEvents, error: testError } = await supabase
-      .from('events')
-      .select('*')
-      .in('tier', testTiers);
-    
-    console.log("Test events with ['free', 'silver']:", testEvents);
-    console.log("Test events error:", testError);
-    
-    // Test 4: Raw SQL approach (if needed)
-    const { data: rawEvents, error: rawError } = await supabase
-      .rpc('get_events_for_tier', { user_tier: userTier });
-    
-    console.log("Raw RPC result:", rawEvents, rawError);
-    
-  } catch (err) {
-    console.error("Debug test error:", err);
-  }
-};
-
-// Updated upgradeTier function
-const upgradeTier = async (newTier) => {
-  try {
-    console.log("Starting tier upgrade...");
-    console.log("Current tier:", user?.publicMetadata?.tier);
-    console.log("New tier:", newTier);
-    
-    const res = await fetch("/api/upgrade-tier", {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ tier: newTier }),
-    });
-
-    const data = await res.json();
-    console.log("Response data:", data);
-
-    if (res.ok && data.success) {
-      console.log("Tier upgrade successful!");
       
-      // Method 1: Reload user data from Clerk
-      await user.reload();
+      console.log("Events count by tier:", tierCounts);
       
-      // Method 2: Force component refresh
-      setRefreshKey(prev => prev + 1);
+      // Test 2: Try fetching silver events specifically
+      const { data: silverEvents, error: silverError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('tier', 'silver');
       
-      // Method 3: Wait a bit and then fetch events
-      setTimeout(() => {
-        fetchEvents();
-      }, 1000);
+      console.log("Silver events:", silverEvents);
+      console.log("Silver events error:", silverError);
       
-    } else {
-      console.error("Tier upgrade failed:", data);
+      // Test 3: Try fetching with different tier arrays
+      const testTiers = ['free', 'silver'];
+      const { data: testEvents, error: testError } = await supabase
+        .from('events')
+        .select('*')
+        .in('tier', testTiers);
+      
+      console.log("Test events with ['free', 'silver']:", testEvents);
+      console.log("Test events error:", testError);
+      
+      // Test 4: Raw SQL approach (if needed)
+      const { data: rawEvents, error: rawError } = await supabase
+        .rpc('get_events_for_tier', { user_tier: userTier });
+      
+      console.log("Raw RPC result:", rawEvents, rawError);
+      
+    } catch (err) {
+      console.error("Debug test error:", err);
     }
-  } catch (err) {
-    console.error("Tier upgrade failed with error:", err);
-  }
-};
+  }, [user]);
 
-// Update your useEffect to include refreshKey as a dependency
-useEffect(() => {
-  if (isLoaded && user) {
-    fetchEvents();
-  }
-}, [isLoaded, user, refreshKey, fetchEvents]); // Add refreshKey here
+  const upgradeTier = useCallback(async (newTier) => {
+    try {
+      console.log("Starting tier upgrade...");
+      console.log("Current tier:", user?.publicMetadata?.tier);
+      console.log("New tier:", newTier);
+      
+      const res = await fetch("/api/upgrade-tier", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tier: newTier }),
+      });
+
+      const data = await res.json();
+      console.log("Response data:", data);
+
+      if (res.ok && data.success) {
+        console.log("Tier upgrade successful!");
+        
+        // Method 1: Reload user data from Clerk
+        await user.reload();
+        
+        // Method 2: Force component refresh
+        setRefreshKey(prev => prev + 1);
+        
+        // Method 3: Wait a bit and then fetch events
+        setTimeout(() => {
+          fetchEvents();
+        }, 1000);
+        
+      } else {
+        console.error("Tier upgrade failed:", data);
+      }
+    } catch (err) {
+      console.error("Tier upgrade failed with error:", err);
+    }
+  }, [user, fetchEvents]);
+
+  // First useEffect - only runs when user is loaded and available
+  useEffect(() => {
+    if (isLoaded && user) {
+      fetchEvents();
+      fetchEventsDebug();
+    }
+  }, [isLoaded, user, fetchEvents, fetchEventsDebug]);
+
+  // Second useEffect - handles refresh key changes
+  useEffect(() => {
+    if (isLoaded && user) {
+      fetchEvents();
+    }
+  }, [refreshKey, fetchEvents, isLoaded, user]);
 
   if (!isLoaded) {
     return (
@@ -166,7 +170,7 @@ useEffect(() => {
             Sign in to view events based on your user tier
           </p>
           <div className="space-y-4">
-          <SignIn routing="hash" />
+            <SignIn routing="hash" />
             <div className="text-center">
               <span className="text-gray-500">Don&apos;t have an account? </span>
               <SignUp routing="hash" />
