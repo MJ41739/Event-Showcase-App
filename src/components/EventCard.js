@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import TierBadge from './TierBadge';
 
 export default function EventCard({ event }) {
@@ -18,7 +19,7 @@ export default function EventCard({ event }) {
       {/* Event Image */}
       <div className="relative h-48 bg-gradient-to-br from-blue-400 to-purple-500">
         {event.image_url ? (
-          <img
+          <Image
             src={event.image_url}
             alt={event.title}
             className="w-full h-full object-cover"

@@ -2,6 +2,8 @@
 
 A responsive web application that allows logged-in users to view events based on their user tier (Free, Silver, Gold, Platinum). Users can only see events available to their tier or any lower tier, with real-time tier upgrades and secure database access.
 
+# Live Link - 
+
 ## 🎯 Features
 
 - **Authentication**: Secure login/signup with Clerk.dev

@@ -19,7 +19,7 @@ export default function Home() {
       fetchEvents();
       fetchEventsDebug();
     }
-  }, [isLoaded, user]);
+  }, [isLoaded, user,fetchEvents, fetchEventsDebug]);
 
   const fetchEvents = async () => {
     try {
@@ -145,7 +145,7 @@ useEffect(() => {
   if (isLoaded && user) {
     fetchEvents();
   }
-}, [isLoaded, user, refreshKey]); // Add refreshKey here
+}, [isLoaded, user, refreshKey, fetchEvents]); // Add refreshKey here
 
   if (!isLoaded) {
     return (
@@ -168,7 +168,7 @@ useEffect(() => {
           <div className="space-y-4">
           <SignIn routing="hash" />
             <div className="text-center">
-              <span className="text-gray-500">Don't have an account? </span>
+              <span className="text-gray-500">Don&apos;t have an account? </span>
               <SignUp routing="hash" />
             </div>
           </div>
