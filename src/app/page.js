@@ -14,6 +14,8 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const { signOut } = useClerk();
+  const [showSignUp, setShowSignUp] = useState(false);
+
 
   // Wrap functions in useCallback to prevent recreation on every render
   const fetchEvents = useCallback(async () => {
@@ -169,17 +171,41 @@ export default function Home() {
           <p className="text-center mb-8 text-gray-600">
             Sign in to view events based on your user tier
           </p>
-          <div className="space-y-4">
-            <SignIn routing="hash" />
-            <div className="text-center">
-              <span className="text-gray-500">Don&apos;t have an account? </span>
-              <SignUp routing="hash" />
+          
+          {!showSignUp ? (
+            // Sign In View
+            <div className="space-y-4">
+              <SignIn routing="hash" />
+              <div className="text-center">
+                <span className="text-gray-500">Don&apos;t have an account? </span>
+                <button
+                  onClick={() => setShowSignUp(true)}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Sign up
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            // Sign Up View
+            <div className="space-y-4">
+              <SignUp routing="hash" />
+              <div className="text-center">
+                <span className="text-gray-500">Already have an account? </span>
+                <button
+                  onClick={() => setShowSignUp(false)}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Sign in
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
