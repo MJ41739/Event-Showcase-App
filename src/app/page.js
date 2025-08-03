@@ -17,6 +17,7 @@ export default function Home() {
   useEffect(() => {
     if (isLoaded && user) {
       fetchEvents();
+      fetchEventsDebug();
     }
   }, [isLoaded, user]);
 
@@ -25,48 +26,126 @@ export default function Home() {
       setLoading(true);
       const userTier = user?.publicMetadata?.tier || 'free';
       
-      // Define tier hierarchy
-      const tierHierarchy = {
-        'free': ['free'],
-        'silver': ['free', 'silver'],
-        'gold': ['free', 'silver', 'gold'],
-        'platinum': ['free', 'silver', 'gold', 'platinum']
-      };
-
-      const allowedTiers = tierHierarchy[userTier] || ['free'];
-
+      console.log("Current user tier:", userTier);
+      
+      // Use the custom RPC function
       const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .in('tier', allowedTiers)
-        .order('event_date', { ascending: true });
-
-      if (error) throw error;
+        .rpc('get_events_by_tier', { user_tier: userTier });
+  
+      console.log("RPC Query result:", { data, error });
+      console.log("Events found:", data?.length);
+  
+      if (error) {
+        console.error("Supabase RPC error:", error);
+        throw error;
+      }
+      
       setEvents(data || []);
     } catch (err) {
+      console.error("fetchEvents error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const upgradeTier = async (newTier) => {
-    try {
-      const res = await fetch("/api/upgrade-tier", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tier: newTier }),
+// Add this state at the top of your component with other useState hooks
+const [refreshKey, setRefreshKey] = useState(0);
+const fetchEventsDebug = async () => {
+  try {
+    const userTier = user?.publicMetadata?.tier || 'free';
+    console.log("Testing with user tier:", userTier);
+    
+    // Test 1: Get count of each tier
+    const { data: tierCounts } = await supabase
+      .from('events')
+      .select('tier')
+      .then(result => {
+        const counts = {};
+        result.data?.forEach(event => {
+          counts[event.tier] = (counts[event.tier] || 0) + 1;
+        });
+        return { data: counts };
       });
-  
-      const data = await res.json();
-      if (data.success) {
-        // Optionally re-fetch user or events
+    
+    console.log("Events count by tier:", tierCounts);
+    
+    // Test 2: Try fetching silver events specifically
+    const { data: silverEvents, error: silverError } = await supabase
+      .from('events')
+      .select('*')
+      .eq('tier', 'silver');
+    
+    console.log("Silver events:", silverEvents);
+    console.log("Silver events error:", silverError);
+    
+    // Test 3: Try fetching with different tier arrays
+    const testTiers = ['free', 'silver'];
+    const { data: testEvents, error: testError } = await supabase
+      .from('events')
+      .select('*')
+      .in('tier', testTiers);
+    
+    console.log("Test events with ['free', 'silver']:", testEvents);
+    console.log("Test events error:", testError);
+    
+    // Test 4: Raw SQL approach (if needed)
+    const { data: rawEvents, error: rawError } = await supabase
+      .rpc('get_events_for_tier', { user_tier: userTier });
+    
+    console.log("Raw RPC result:", rawEvents, rawError);
+    
+  } catch (err) {
+    console.error("Debug test error:", err);
+  }
+};
+
+// Updated upgradeTier function
+const upgradeTier = async (newTier) => {
+  try {
+    console.log("Starting tier upgrade...");
+    console.log("Current tier:", user?.publicMetadata?.tier);
+    console.log("New tier:", newTier);
+    
+    const res = await fetch("/api/upgrade-tier", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ tier: newTier }),
+    });
+
+    const data = await res.json();
+    console.log("Response data:", data);
+
+    if (res.ok && data.success) {
+      console.log("Tier upgrade successful!");
+      
+      // Method 1: Reload user data from Clerk
+      await user.reload();
+      
+      // Method 2: Force component refresh
+      setRefreshKey(prev => prev + 1);
+      
+      // Method 3: Wait a bit and then fetch events
+      setTimeout(() => {
         fetchEvents();
-      }
-    } catch (err) {
-      console.error("Tier upgrade failed", err);
+      }, 1000);
+      
+    } else {
+      console.error("Tier upgrade failed:", data);
     }
-  };
+  } catch (err) {
+    console.error("Tier upgrade failed with error:", err);
+  }
+};
+
+// Update your useEffect to include refreshKey as a dependency
+useEffect(() => {
+  if (isLoaded && user) {
+    fetchEvents();
+  }
+}, [isLoaded, user, refreshKey]); // Add refreshKey here
 
   if (!isLoaded) {
     return (
