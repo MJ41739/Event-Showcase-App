@@ -1,6 +1,6 @@
 'use client';
 import { useUser, useClerk, SignIn, SignUp } from "@clerk/nextjs";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import EventCard from "@/components/EventCard";
 import TierBadge from "@/components/TierBadge";
@@ -8,79 +8,149 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function Home() {
   const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const { clerk } = useClerk();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const { signOut } = useClerk();
 
-  // Simplified useEffect - no dependencies on functions
-  useEffect(() => {
-    if (!isLoaded || !user) {
-      setLoading(false);
-      return;
-    }
-
-    // Define function inside useEffect to avoid dependency issues
-    const loadEvents = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        const userTier = user?.publicMetadata?.tier || 'free';
-        console.log("Loading events for tier:", userTier);
-        
-        const { data, error: fetchError } = await supabase
-          .rpc('get_events_by_tier', { user_tier: userTier });
-        
-        if (fetchError) {
-          console.error("Supabase error:", fetchError);
-          throw fetchError;
-        }
-        
-        console.log("Events loaded:", data?.length || 0);
-        setEvents(data || []);
-        
-      } catch (err) {
-        console.error("Error loading events:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadEvents();
-  }, [isLoaded, user]); // Only depend on basic values
-
-  // Simplified upgrade function
-  const handleUpgrade = async (newTier) => {
+  // Wrap functions in useCallback to prevent recreation on every render
+  const fetchEvents = useCallback(async () => {
+    if (!user) return;
+    
     try {
-      console.log("Upgrading to:", newTier);
+      setLoading(true);
+      const userTier = user?.publicMetadata?.tier || 'free';
       
-      const response = await fetch("/api/upgrade-tier", {
+      console.log("Current user tier:", userTier);
+      
+      // Use the custom RPC function
+      const { data, error } = await supabase
+        .rpc('get_events_by_tier', { user_tier: userTier });
+  
+      console.log("RPC Query result:", { data, error });
+      console.log("Events found:", data?.length);
+  
+      if (error) {
+        console.error("Supabase RPC error:", error);
+        throw error;
+      }
+      
+      setEvents(data || []);
+    } catch (err) {
+      console.error("fetchEvents error:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  const fetchEventsDebug = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const userTier = user?.publicMetadata?.tier || 'free';
+      console.log("Testing with user tier:", userTier);
+      
+      // Test 1: Get count of each tier
+      const { data: tierCounts } = await supabase
+        .from('events')
+        .select('tier')
+        .then(result => {
+          const counts = {};
+          result.data?.forEach(event => {
+            counts[event.tier] = (counts[event.tier] || 0) + 1;
+          });
+          return { data: counts };
+        });
+      
+      console.log("Events count by tier:", tierCounts);
+      
+      // Test 2: Try fetching silver events specifically
+      const { data: silverEvents, error: silverError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('tier', 'silver');
+      
+      console.log("Silver events:", silverEvents);
+      console.log("Silver events error:", silverError);
+      
+      // Test 3: Try fetching with different tier arrays
+      const testTiers = ['free', 'silver'];
+      const { data: testEvents, error: testError } = await supabase
+        .from('events')
+        .select('*')
+        .in('tier', testTiers);
+      
+      console.log("Test events with ['free', 'silver']:", testEvents);
+      console.log("Test events error:", testError);
+      
+      // Test 4: Raw SQL approach (if needed)
+      const { data: rawEvents, error: rawError } = await supabase
+        .rpc('get_events_for_tier', { user_tier: userTier });
+      
+      console.log("Raw RPC result:", rawEvents, rawError);
+      
+    } catch (err) {
+      console.error("Debug test error:", err);
+    }
+  }, [user]);
+
+  const upgradeTier = useCallback(async (newTier) => {
+    try {
+      console.log("Starting tier upgrade...");
+      console.log("Current tier:", user?.publicMetadata?.tier);
+      console.log("New tier:", newTier);
+      
+      const res = await fetch("/api/upgrade-tier", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ tier: newTier }),
       });
 
-      const result = await response.json();
-      
-      if (response.ok && result.success) {
-        // Reload user data
+      const data = await res.json();
+      console.log("Response data:", data);
+
+      if (res.ok && data.success) {
+        console.log("Tier upgrade successful!");
+        
+        // Method 1: Reload user data from Clerk
         await user.reload();
         
-        // Simple page reload as fallback
-        window.location.reload();
+        // Method 2: Force component refresh
+        setRefreshKey(prev => prev + 1);
+        
+        // Method 3: Wait a bit and then fetch events
+        setTimeout(() => {
+          fetchEvents();
+        }, 1000);
+        
       } else {
-        console.error("Upgrade failed:", result);
-        setError("Failed to upgrade tier");
+        console.error("Tier upgrade failed:", data);
       }
     } catch (err) {
-      console.error("Upgrade error:", err);
-      setError("Failed to upgrade tier");
+      console.error("Tier upgrade failed with error:", err);
     }
-  };
+  }, [user, fetchEvents]);
 
-  // Loading state
+  // First useEffect - only runs when user is loaded and available
+  useEffect(() => {
+    if (isLoaded && user) {
+      fetchEvents();
+      fetchEventsDebug();
+    }
+  }, [isLoaded, user, fetchEvents, fetchEventsDebug]);
+
+  // Second useEffect - handles refresh key changes
+  useEffect(() => {
+    if (isLoaded && user) {
+      fetchEvents();
+    }
+  }, [refreshKey, fetchEvents, isLoaded, user]);
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -89,7 +159,6 @@ export default function Home() {
     );
   }
 
-  // Not signed in
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -112,7 +181,6 @@ export default function Home() {
     );
   }
 
-  // Main app
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -147,7 +215,7 @@ export default function Home() {
             {['free', 'silver', 'gold', 'platinum'].map((tier) => (
               <button
                 key={tier}
-                onClick={() => handleUpgrade(tier)}
+                onClick={() => upgradeTier(tier)}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   (user?.publicMetadata?.tier || 'free') === tier
                     ? 'bg-blue-600 text-white'
@@ -173,12 +241,6 @@ export default function Home() {
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
               <p className="text-red-800">Error: {error}</p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="mt-2 text-sm text-red-600 underline"
-              >
-                Reload Page
-              </button>
             </div>
           )}
 
