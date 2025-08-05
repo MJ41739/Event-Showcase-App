@@ -174,12 +174,12 @@ export default function Home() {
           
           {!showSignUp ? (
             // Sign In View
-            <div className="space-y-4">
+            <div className="space-y-4 flex justify-center items-center">
               <SignIn routing="hash" />
             </div>
           ) : (
             // Sign Up View
-            <div className="space-y-4">
+            <div className="space-y-4 flex justify-center items-center">
               <SignUp routing="hash" />
               <div className="text-center">
                 <span className="text-gray-500">Already have an account? </span>
