@@ -1,6 +1,6 @@
 'use client';
 import { useUser, useClerk, SignIn, SignUp } from "@clerk/nextjs";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import EventCard from "@/components/EventCard";
 import TierBadge from "@/components/TierBadge";
@@ -8,151 +8,164 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function Home() {
   const { user, isLoaded } = useUser();
-  const { clerk } = useClerk();
+  const { signOut } = useClerk();
   const [events, setEvents] = useState([]);
+  const [filteredEvents, setFilteredEvents] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('default');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const { signOut } = useClerk();
   const [showSignUp, setShowSignUp] = useState(false);
 
-
-  // Wrap functions in useCallback to prevent recreation on every render
-  const fetchEvents = useCallback(async () => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      const userTier = user?.publicMetadata?.tier || 'free';
-      
-      console.log("Current user tier:", userTier);
-      
-      // Use the custom RPC function
-      const { data, error } = await supabase
-        .rpc('get_events_by_tier', { user_tier: userTier });
-  
-      console.log("RPC Query result:", { data, error });
-      console.log("Events found:", data?.length);
-  
-      if (error) {
-        console.error("Supabase RPC error:", error);
-        throw error;
-      }
-      
-      setEvents(data || []);
-    } catch (err) {
-      console.error("fetchEvents error:", err);
-      setError(err.message);
-    } finally {
+  // Simplified useEffect - no dependencies on functions
+  useEffect(() => {
+    if (!isLoaded || !user) {
       setLoading(false);
+      return;
     }
-  }, [user]);
 
-  const fetchEventsDebug = useCallback(async () => {
-    if (!user) return;
-    
-    try {
-      const userTier = user?.publicMetadata?.tier || 'free';
-      console.log("Testing with user tier:", userTier);
-      
-      // Test 1: Get count of each tier
-      const { data: tierCounts } = await supabase
-        .from('events')
-        .select('tier')
-        .then(result => {
-          const counts = {};
-          result.data?.forEach(event => {
-            counts[event.tier] = (counts[event.tier] || 0) + 1;
-          });
-          return { data: counts };
-        });
-      
-      console.log("Events count by tier:", tierCounts);
-      
-      // Test 2: Try fetching silver events specifically
-      const { data: silverEvents, error: silverError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('tier', 'silver');
-      
-      console.log("Silver events:", silverEvents);
-      console.log("Silver events error:", silverError);
-      
-      // Test 3: Try fetching with different tier arrays
-      const testTiers = ['free', 'silver'];
-      const { data: testEvents, error: testError } = await supabase
-        .from('events')
-        .select('*')
-        .in('tier', testTiers);
-      
-      console.log("Test events with ['free', 'silver']:", testEvents);
-      console.log("Test events error:", testError);
-      
-      // Test 4: Raw SQL approach (if needed)
-      const { data: rawEvents, error: rawError } = await supabase
-        .rpc('get_events_for_tier', { user_tier: userTier });
-      
-      console.log("Raw RPC result:", rawEvents, rawError);
-      
-    } catch (err) {
-      console.error("Debug test error:", err);
+    // Define function inside useEffect to avoid dependency issues
+    const loadEvents = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const userTier = user?.publicMetadata?.tier || 'free';
+        console.log("Loading events for tier:", userTier);
+        
+        const { data, error: fetchError } = await supabase
+          .rpc('get_events_by_tier', { user_tier: userTier });
+        
+        if (fetchError) {
+          console.error("Supabase error:", fetchError);
+          throw fetchError;
+        }
+        
+        console.log("Events loaded:", data?.length || 0);
+        setEvents(data || []);
+        setFilteredEvents(data || []); // Initialize filtered events
+        
+      } catch (err) {
+        console.error("Error loading events:", err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEvents();
+  }, [isLoaded, user]); // Only depend on basic values
+
+  // Search functionality
+  useEffect(() => {
+    let filtered = events;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = events.filter(event => {
+        return (
+          event.title?.toLowerCase().includes(query) ||
+          event.description?.toLowerCase().includes(query) ||
+          event.location?.toLowerCase().includes(query) ||
+          event.category?.toLowerCase().includes(query) ||
+          event.tier?.toLowerCase().includes(query)
+        );
+      });
     }
-  }, [user]);
 
-  const upgradeTier = useCallback(async (newTier) => {
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'title-asc':
+          return (a.title || '').localeCompare(b.title || '');
+        case 'title-desc':
+          return (b.title || '').localeCompare(a.title || '');
+        case 'date-earliest':
+          return new Date(a.date || 0) - new Date(b.date || 0);
+        case 'date-latest':
+          return new Date(b.date || 0) - new Date(a.date || 0);
+        case 'location-asc':
+          return (a.location || '').localeCompare(b.location || '');
+        case 'location-desc':
+          return (b.location || '').localeCompare(a.location || '');
+        case 'tier-asc':
+          const tierOrder = { 'free': 1, 'silver': 2, 'gold': 3, 'platinum': 4 };
+          return (tierOrder[a.tier] || 0) - (tierOrder[b.tier] || 0);
+        case 'tier-desc':
+          const tierOrderDesc = { 'free': 1, 'silver': 2, 'gold': 3, 'platinum': 4 };
+          return (tierOrderDesc[b.tier] || 0) - (tierOrderDesc[a.tier] || 0);
+        case 'category-asc':
+          return (a.category || '').localeCompare(b.category || '');
+        case 'category-desc':
+          return (b.category || '').localeCompare(a.category || '');
+        default:
+          return 0; // Default order
+      }
+    });
+
+    setFilteredEvents(sorted);
+  }, [searchQuery, events, sortBy]);
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+  };
+
+  const handleSortChange = (e) => {
+    setSortBy(e.target.value);
+  };
+
+  const getSortLabel = (sortValue) => {
+    const sortOptions = {
+      'default': 'Default Order',
+      'title-asc': 'Title (A-Z)',
+      'title-desc': 'Title (Z-A)',
+      'date-earliest': 'Date (Earliest First)',
+      // 'date-latest': 'Date (Latest First)',
+      'location-asc': 'Location (A-Z)',
+      'location-desc': 'Location (Z-A)',
+      'tier-asc': 'Tier (Free to Platinum)',
+      'tier-desc': 'Tier (Platinum to Free)',
+      'category-asc': 'Category (A-Z)',
+      'category-desc': 'Category (Z-A)'
+    };
+    return sortOptions[sortValue] || 'Default Order';
+  };
+
+  // Simplified upgrade function
+  const handleUpgrade = async (newTier) => {
     try {
-      console.log("Starting tier upgrade...");
-      console.log("Current tier:", user?.publicMetadata?.tier);
-      console.log("New tier:", newTier);
+      console.log("Upgrading to:", newTier);
       
-      const res = await fetch("/api/upgrade-tier", {
+      const response = await fetch("/api/upgrade-tier", {
         method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier: newTier }),
       });
 
-      const data = await res.json();
-      console.log("Response data:", data);
-
-      if (res.ok && data.success) {
-        console.log("Tier upgrade successful!");
-        
-        // Method 1: Reload user data from Clerk
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // Reload user data
         await user.reload();
         
-        // Method 2: Force component refresh
-        setRefreshKey(prev => prev + 1);
-        
-        // Method 3: Wait a bit and then fetch events
-        setTimeout(() => {
-          fetchEvents();
-        }, 1000);
-        
+        // Simple page reload as fallback
+        window.location.reload();
       } else {
-        console.error("Tier upgrade failed:", data);
+        console.error("Upgrade failed:", result);
+        setError("Failed to upgrade tier");
       }
     } catch (err) {
-      console.error("Tier upgrade failed with error:", err);
+      console.error("Upgrade error:", err);
+      setError("Failed to upgrade tier");
     }
-  }, [user, fetchEvents]);
+  };
 
-  // First useEffect - only runs when user is loaded and available
-  useEffect(() => {
-    if (isLoaded && user) {
-      fetchEvents();
-      fetchEventsDebug();
-    }
-  }, [isLoaded, user, fetchEvents, fetchEventsDebug]);
-
-  // Second useEffect - handles refresh key changes
-  useEffect(() => {
-    if (isLoaded && user) {
-      fetchEvents();
-    }
-  }, [refreshKey, fetchEvents, isLoaded, user]);
-
+  // Loading state
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -161,6 +174,7 @@ export default function Home() {
     );
   }
 
+  // Not signed in
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -174,12 +188,21 @@ export default function Home() {
           
           {!showSignUp ? (
             // Sign In View
-            <div className="space-y-4 flex justify-center items-center">
+            <div className="space-y-4">
               <SignIn routing="hash" />
+              <div className="text-center">
+                <span className="text-gray-500">Don&apos;t have an account? </span>
+                <button
+                  onClick={() => setShowSignUp(true)}
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Sign up
+                </button>
+              </div>
             </div>
           ) : (
             // Sign Up View
-            <div className="space-y-4 flex justify-center items-center">
+            <div className="space-y-4">
               <SignUp routing="hash" />
               <div className="text-center">
                 <span className="text-gray-500">Already have an account? </span>
@@ -197,7 +220,7 @@ export default function Home() {
     );
   }
 
-
+  // Main app
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
@@ -225,6 +248,125 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search and Sort Bar */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search Bar */}
+            <div className="flex-1">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg 
+                    className="h-5 w-5 text-gray-400" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+                    />
+                  </svg>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search events by title, description, location, category..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  >
+                    <svg 
+                      className="h-5 w-5 text-gray-400 hover:text-gray-600" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round" 
+                        strokeWidth={2} 
+                        d="M6 18L18 6M6 6l12 12" 
+                      />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="flex-shrink-0">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg 
+                    className="h-5 w-5 text-gray-400" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      strokeWidth={2} 
+                      d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" 
+                    />
+                  </svg>
+                </div>
+                <select
+                  value={sortBy}
+                  onChange={handleSortChange}
+                  className="block w-full pl-10 pr-8 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 min-w-64"
+                >
+                  <option value="default">Default Order</option>
+                  <optgroup label="By Title">
+                    <option value="title-asc">Title (A-Z)</option>
+                    <option value="title-desc">Title (Z-A)</option>
+                  </optgroup>
+                  <optgroup label="By Date">
+                    <option value="date-earliest">Date (Earliest First)</option>
+                    {/* <option value="date-latest">Date (Latest First)</option> */}
+                  </optgroup>
+                  <optgroup label="By Location">
+                    <option value="location-asc">Location (A-Z)</option>
+                    <option value="location-desc">Location (Z-A)</option>
+                  </optgroup>
+                  <optgroup label="By Tier">
+                    <option value="tier-asc">Tier (Free to Platinum)</option>
+                    <option value="tier-desc">Tier (Platinum to Free)</option>
+                  </optgroup>
+                  <optgroup label="By Category">
+                    <option value="category-asc">Category (A-Z)</option>
+                    <option value="category-desc">Category (Z-A)</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Search and Sort Results Info */}
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="text-sm text-gray-600">
+              {searchQuery ? (
+                filteredEvents.length > 0 
+                  ? `Found ${filteredEvents.length} event${filteredEvents.length !== 1 ? 's' : ''} matching "${searchQuery}"`
+                  : `No events found matching "${searchQuery}"`
+              ) : (
+                `Showing ${filteredEvents.length} event${filteredEvents.length !== 1 ? 's' : ''}`
+              )}
+            </div>
+            {sortBy !== 'default' && (
+              <div className="text-sm text-gray-500">
+                Sorted by: {getSortLabel(sortBy)}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Tier Upgrade Section */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Upgrade Your Tier</h2>
@@ -232,7 +374,7 @@ export default function Home() {
             {['free', 'silver', 'gold', 'platinum'].map((tier) => (
               <button
                 key={tier}
-                onClick={() => upgradeTier(tier)}
+                onClick={() => handleUpgrade(tier)}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   (user?.publicMetadata?.tier || 'free') === tier
                     ? 'bg-blue-600 text-white'
@@ -258,18 +400,49 @@ export default function Home() {
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
               <p className="text-red-800">Error: {error}</p>
+              <button 
+                onClick={() => window.location.reload()}
+                className="mt-2 text-sm text-red-600 underline"
+              >
+                Reload Page
+              </button>
             </div>
           )}
 
-          {!loading && !error && events.length === 0 && (
+          {!loading && !error && filteredEvents.length === 0 && searchQuery && (
+            <div className="text-center py-12">
+              <svg 
+                className="mx-auto h-12 w-12 text-gray-400 mb-4" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  strokeWidth={2} 
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
+                />
+              </svg>
+              <p className="text-gray-500 mb-2">No events found for "{searchQuery}"</p>
+              <button
+                onClick={clearSearch}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Clear search to see all events
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && filteredEvents.length === 0 && !searchQuery && (
             <div className="text-center py-12">
               <p className="text-gray-500">No events available for your tier.</p>
             </div>
           )}
 
-          {!loading && !error && events.length > 0 && (
+          {!loading && !error && filteredEvents.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map((event) => (
+              {filteredEvents.map((event) => (
                 <EventCard key={event.id} event={event} />
               ))}
             </div>
