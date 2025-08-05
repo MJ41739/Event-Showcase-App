@@ -369,7 +369,7 @@ export default function Home() {
 
         {/* Tier Upgrade Section */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-          <h2 className="text-lg font-semibold mb-4">Upgrade Your Tier</h2>
+          <h2 className="text-lg text-black font-semibold mb-4">Upgrade Your Tier</h2>
           <div className="flex flex-wrap gap-2">
             {['free', 'silver', 'gold', 'platinum'].map((tier) => (
               <button
@@ -389,7 +389,7 @@ export default function Home() {
 
         {/* Events Section */}
         <div>
-          <h2 className="text-2xl font-bold mb-6">Available Events</h2>
+          <h2 className="text-2xl text-black font-bold mb-6">Available Events</h2>
           
           {loading && (
             <div className="flex justify-center py-12">
