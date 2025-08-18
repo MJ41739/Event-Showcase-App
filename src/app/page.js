@@ -188,7 +188,7 @@ export default function Home() {
           
           {!showSignUp ? (
             // Sign In View
-            <div className="space-y-4">
+            <div className="space-y-4 flex flex-wrap items-center justify-center ">
               <SignIn routing="hash" />
               <div className="text-center">
                 <span className="text-gray-500">Don&apos;t have an account? </span>
